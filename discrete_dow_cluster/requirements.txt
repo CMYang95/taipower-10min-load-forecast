@@ -1,0 +1,8 @@
+# discrete_dow_cluster 四臂管線依賴
+# 安裝：pip install -r requirements.txt
+
+numpy>=1.24
+pandas>=2.0
+PyYAML>=6.0
+bokeh>=3.0
+xgboost>=2.0

@@ -1,0 +1,88 @@
+# 路徑相對 discrete_dow_cluster/
+paths:
+  load_csv: "../台電每10分鐘負載資料.csv"
+  # 可選：缺檔時 solar 特徵為空，ft_xgb 仍可跑
+  energy_csv: ""
+  odwo0011_csv: "../weatherdata2/odwo0011-每日逐時氣象觀測資料.csv"
+  weather_stations_dir: "../weatherdata2"
+  weather_daily_csv: "../weather_arima/weather_daily_features.csv"
+  holidays_csv: "./data/holidays.csv"
+  output_dir: "./outputs"
+
+splits:
+  gate_valid_start: "2026-07-01"
+  gate_test_start: "2026-08-01"
+
+features:
+  horizon_days: 3
+  weather_lag_days: 1
+  temp_sun_cols: ["T_mean", "sunshine"]
+  humid_wind_cols: ["humidity", "wind_speed"]
+
+xgb:
+  n_estimators: 200
+  max_depth: 4
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.8
+  min_child_weight: 8
+  seed: 42
+  peak_start: "11:00"
+  peak_end: "17:00"
+  night_peak_start: "17:10"
+  night_peak_end: "21:00"
+  peak_weight: 8.0
+  ramp_extreme_weight: 1.5
+  ramp_extreme_q: 0.90
+  resid_lag_enable: true
+  peak_bias_enable: false
+  ramp_bias_enable: false
+  peak_feedback_enable: false
+  ramp_feedback_enable: false
+
+dow:
+  xgb_train_days: 365
+  min_cluster_samples: 200
+  proto_max_days: 16
+  holiday_cluster_id: 7
+  # rolling=正式（refs 僅 <D 且已發生）；batch_oracle=分析用
+  forecast_mode: rolling
+  # dow_proto：滾動日曆 D-1..D-N slot 殘差補正（actual−pred）
+  proto_resid_lookback: 2
+  proto_resid_beta: 1.0
+  # 雙向偏差校正 bias_clip（主程式正式步驟；鍵名 underest_penalty 相容舊腳本）
+  # refs = 日曆 D-1..D-N ∪ 上週同 weekday；同 weekday 權重較大；最終=pre+clip(g,-C,C)
+  # gap_mode=peak：尖峰混 tip；weekend_uplift_only：六日禁止下修（避免平日高估訊號壓週末）
+  underest_penalty:
+    enable: true
+    lookback_days: 2
+    include_prev_same_dow: true
+    same_dow_weight: 2.0
+    calendar_weight: 1.0
+    gap_mode: peak
+    peak_blend: 0.65
+    weekend_uplift_only: true
+    cap_mw: 0
+    cap_by_arm:
+      dow_proto: 0
+      slot_best: 3200
+      ft_xgb_best: 3200
+  # ft pre 在 bias_clip 前做同 weekday 近期水準縮放（抑季節漂移）
+  level_scale:
+    enable: true
+    k_same_dow: 2
+    clip: [0.85, 1.15]
+  # Slot 掃描 D-1~D-7；FT lookbacks 含 8（skip-xgb-valid 預設 K=8）
+  slot_lookbacks: [1, 2, 3, 4, 5, 6, 7]
+  finetune_lookbacks: [1, 2, 3, 4, 5, 6, 7, 8]
+  slot_same_dow_only: true
+  slot_betas: [0.3, 0.5, 0.7, 1.0]
+  alpha_grid: [0.2, 0.3, 0.4, 0.5]
+  smooth_k_grid: [1, 3, 5]
+  day_scale_grid: [1.0, 1.01]
+  night_scale_grid: [1.0]
+  postprocess:
+    day_start: "11:00"
+    day_end: "17:00"
+    night_start: "17:10"
+    night_end: "21:00"

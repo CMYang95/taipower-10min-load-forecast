@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.env
+
+# IDE / OS
+.cursor/
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini
+
+# 電力負載 CSV（請自行下載，見 README）
+台電每10分鐘負載資料.csv
+*負載*.csv
+*load*.csv
+
+# 天氣相關資料（請自行下載，見 README）
+weatherdata2/
+weather_arima/
+weather2.csv
+**/odwo0011*.csv
+**/weather_daily_features.csv
+
+# 實驗輸出（可重跑產生）
+discrete_dow_cluster/outputs/
+
+# 雜項大檔
+*.zip
+*.7z
+*.rar
+
+# 雜項
+*.txt
+!requirements.txt
+!README*.md
+
