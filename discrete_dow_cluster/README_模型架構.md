@@ -1,13 +1,13 @@
 # 預測模型架構說明（白話版）
 
-這份文件說明 `discrete_dow_cluster` **目前實際在跑的模型**：怎麼分群、怎麼一天一天預測、四條預測臂差在哪、最後的**雙向偏差校正（bias_clip）**怎麼加，以及**競賽 Total_Score** 怎麼算。
+這份文件說明 `discrete_dow_cluster` **目前實際在跑的模型**：怎麼分群、怎麼一天一天預測、**四種預測方法**差在哪、最後的**雙向偏差校正（bias_clip）**怎麼加，以及**競賽 Total_Score** 怎麼算。
 
 | 項目 | 位置 |
 |------|------|
 | 主實驗腳本 | `app/experiment_slot_vs_finetune.py` |
 | 設定檔 | `settings.yaml`（`dow.*`、`splits.*`、天氣 lag） |
 | 競賽評分 | `domain/scoring.py`（已對齊官方簡報） |
-| 四條臂 | `dow_proto_raw` → `dow_proto` → `slot_best` → `ft_xgb_best` |
+| 四種方法 | `dow_proto_raw` → `dow_proto` → `slot_best` → `ft_xgb_best` |
 
 ---
 
@@ -17,8 +17,8 @@
 依「星期幾／假日」分群
   → 每天獨立預測 24 小時（144 個 10 分鐘點）
   → 先貼「同群歷史中位數曲線」當底
-  → 各臂再加不同校正（殘差 / slot / XGB）
-  → 正式三臂再讀 settings 做「雙向偏差校正 clip ±C」
+  → 各方法再加不同校正（殘差 / slot / XGB）
+  → 除 raw 外的三種再讀 settings 做「雙向偏差校正 clip ±C」
        （ft 先做 level_scale；含前置 lookback 天估 g；raw 不加）
   → 抽出 Peak / Ramp 指標，用官方公式算 Total_Score（越低越好）
 ```
@@ -27,7 +27,7 @@
 
 **兩個常被同名混淆的東西：**
 
-| | 比賽 `S_under_penalty` | 管線 `bias_clip`（settings 鍵名 `underest_penalty`） |
+| | 比賽 `S_under_penalty` | 流程裡的 `bias_clip`（settings 鍵名 `underest_penalty`） |
 |--|--|--|
 | 角色 | **評分項**（額外罰分） | **改預測**（`final = pre + clip(g,-C,C)`） |
 | 作用對象 | Day/Night Peak、RampUp 低估 | 全日 10 分鐘曲線 |
@@ -35,7 +35,7 @@
 
 ---
 
-## 1. 共同規則（四臂都遵守）
+## 1. 共同規則（四種方法都遵守）
 
 ### 1.1 硬分群：一天只屬一群
 
@@ -81,11 +81,11 @@
 3. 每個時段（一天 144 格）對這 N 天取**中位數** → 得到一條「典型日曲線」
 4. 預測當天：看當天屬於哪一群，把該群曲線整條貼上去
 
-這就是所有臂的「底板」。
+這就是所有方法的「底板」。
 
 ---
 
-## 2. 四臂長什麼樣（由簡到繁）
+## 2. 四種方法長什麼樣（由簡到繁）
 
 ```text
 dow_proto_raw     只用同群 16 日中位數（對照用，不加校正）
@@ -98,18 +98,18 @@ ft_xgb_best       同群近 K=8 日中位數 + XGB 殘差（天氣等）
                   + level_scale + bias_clip（定案 C=3200）
 ```
 
-| 臂 | 底板 | 額外校正 | bias_clip | 超參 |
+| 方法 | 底板 | 額外校正 | bias_clip | 超參 |
 |----|------|----------|-----------|------|
 | `dow_proto_raw` | 同群 16 日中位數 | 無 | **否** | 固定 |
 | `dow_proto` | 同群 16 日中位數 | 日曆 D−1、D−2 殘差 | **是**（C=0） | 固定 lookback=2、β=1 |
 | `slot_best` | 同群 16 日中位數 | 同群最近 L 日殘差 × β | **是**（C=3200） | valid 選 L、β（凍結 L=6、β=1.0） |
 | `ft_xgb_best` | 同群最近 **K=8** 日中位數 | 同群 XGB 殘差 + level_scale | **是**（C=3200） | skip 預設 K=8；valid 可掃 1–8 |
 
-四臂是**互斥對照**，不是串成一條路：`slot_best` 不做 XGB；`ft_xgb_best` 不做 slot。
+四種方法是**互斥對照**，不是串成一條路：`slot_best` 不做 XGB；`ft_xgb_best` 不做 slot。
 
 ---
 
-## 3. 各臂白話流程
+## 3. 各方法白話流程
 
 ### 3.1 `dow_proto_raw`：純原型
 
@@ -162,7 +162,7 @@ ft_xgb_best       同群近 K=8 日中位數 + XGB 殘差（天氣等）
 
 ---
 
-## 4. 雙向偏差校正（主程式正式三臂最後一步）
+## 4. 雙向偏差校正（主程式正式三種方法的最後一步）
 
 主實驗 `app/experiment_slot_vs_finetune.py` **固定**讀 `settings.yaml` → `dow.underest_penalty` 執行本步驟（不是選配外掛）。鍵名相容舊腳本，語意 = **bias_clip**（改預測），不是比賽評分裡的 `S_under_penalty`。
 
@@ -171,13 +171,13 @@ ft_xgb_best       同群近 K=8 日中位數 + XGB 殘差（天氣等）
 近期若系統性**低估**就往上抬，**高估**就往下壓；幅度用上限 **C（MW）** 卡住。校正量加回**下一日**預測線。
 
 - **有套用**：`dow_proto`、`slot_best`、`ft_xgb_best`
-- **不套用**：`dow_proto_raw`；對照臂 `slot_lb*` / `ft_xgb_k*` 亦不套（加速）
-- **C=0**：該臂關閉校正（目前只有 `dow_proto`）
+- **不套用**：`dow_proto_raw`；對照用的 `slot_lb*` / `ft_xgb_k*` 亦不套（加速）
+- **C=0**：該方法關閉校正（目前只有 `dow_proto`）
 - **C 太小會修不夠**：例 9/8–9/9 ft 約高估 2.0–2.6 GW，C=800 時 p 卡在 −800；定案改用較大 C 後 9/10–12 才明顯下壓
 
 ### 4.2 前置 lookback 天（例：目標 9/10–9/12）
 
-`lookback_days: 2` 且 `include_prev_same_dow: true` 時，主臂會**額外先預測** refs 所需前置日（前置日本身不輸出最終曲線，只用來估 g）：
+`lookback_days: 2` 且 `include_prev_same_dow: true` 時，主方法會**額外先預測** refs 所需前置日（前置日本身不輸出最終曲線，只用來估 g）：
 
 ```text
 pre_extra 例 = [9/3, 9/4, 9/5, 9/8, 9/9]   # 含日曆鄰近 + 上週同 weekday
@@ -266,7 +266,7 @@ Penalty_{\text{peak}} = \overline{\max(0,\,rel_{\text{day}})\times 0.2} + \overl
 Penalty_{\text{ramp}} = \overline{\max(0,\,rel_{\text{RampUp}})\times 0.2}
 \]
 
-主實驗依 Total 最低建議交卷臂；`app/tune_underest_cap.py` 依跨窗 mean Total 選 C。  
+主實驗依 Total 最低建議交卷方法；`app/tune_underest_cap.py` 依跨窗 mean Total 選 C。  
 **注意：** 對齊官方後，舊 CSV／HTML 的分數尺度不可與新數字直比（Peak/Ramp 約 ×100）。
 
 ---
@@ -316,7 +316,7 @@ flowchart TD
   cl --> ftx
 ```
 
-`raw` 停在中位數；另外三臂在各自校正後再加 bias_clip（`p=clip(g,-C,C)`）。ft 多一步 level_scale。
+`raw` 停在中位數；另外三種方法在各自校正後再加 bias_clip（`p=clip(g,-C,C)`）。ft 多一步 level_scale。
 
 ---
 
@@ -338,7 +338,7 @@ flowchart TD
 ```text
 cd discrete_dow_cluster
 
-# ① 主實驗（四臂 + 殘差圖 + bias_clip；C 用 settings 定案；FT K=8）
+# ① 主實驗（四種方法 + 殘差圖 + bias_clip；C 用 settings 定案；FT K=8）
 python run_experiment.py --origin 2026-09-10 --horizon-days 3 --skip-xgb-valid --open
 
 # ② 換窗／重調：偏差上限 C 掃描（預設含 1600/2400/2800/3200）
@@ -354,7 +354,7 @@ python run_tune_cap.py --origins 2026-08-06,2026-09-10 --horizon-days 3 \
 ## 8. 建議閱讀順序
 
 1. **§1** 分群 + 分開日 + 中位數底板（搞清楚「一天一天、一群一群」）
-2. **§2–§3** 四臂各多加了什麼（slot ≠ ft）
+2. **§2–§3** 四種方法各多加了什麼（slot ≠ ft）
 3. **§4** bias_clip 與 C 怎麼選（改預測）
-4. **§5** 官方 Total_Score（選臂／掃 C 的準繩）
+4. **§5** 官方 Total_Score（選方法／掃 C 的準繩）
 5. 看成績時：正式結論用 `*_best`；表上的 `slot_lb*`、`ft_xgb_k*` 只是對照，不要依 test 再重挑
