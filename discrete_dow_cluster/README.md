@@ -89,7 +89,7 @@ python run_tune_cap.py --skip-xgb-valid --xgb-k 8
 | 檔案 | 內容 |
 |------|------|
 | `compare_by_day.html` | 逐日曲線 + Total_Score + 建議交卷方法 |
-| `competition_scores.csv` | 比賽分 |
+| `competition_scores.csv` | 分數比 |
 | `level_scale_by_day.csv` | ft 水準縮放 |
 | `curves_pre_with_extra_10min.csv` | pre（含 refs） |
 | `underest_penalty.html` | g / p / refs |
@@ -99,7 +99,7 @@ python run_tune_cap.py --skip-xgb-valid --xgb-k 8
 | 路徑 | 角色 |
 |------|------|
 | `infra/data_io.py` | 負載／天氣／假日載入 |
-| `domain/scoring.py` | 競賽 Total_Score + `extract_day` |
+| `domain/scoring.py` | Total_Score + `extract_day` |
 | `domain/train_dow_xgb.py` 等 | 四種預測方法的核心 |
 | `app/experiment_slot_vs_finetune.py` | 主實驗 |
 | `data/holidays.csv` | 國定假日表 |

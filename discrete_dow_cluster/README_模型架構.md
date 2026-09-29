@@ -6,7 +6,7 @@
 |------|------|
 | 主實驗腳本 | `app/experiment_slot_vs_finetune.py` |
 | 設定檔 | `settings.yaml`（`dow.*`、`splits.*`、天氣 lag） |
-| 競賽評分 | `domain/scoring.py`（已對齊官方簡報） |
+| 評分 | `domain/scoring.py` |
 | 四種方法 | `dow_proto_raw` → `dow_proto` → `slot_best` → `ft_xgb_best` |
 
 ---
@@ -20,18 +20,10 @@
   → 各方法再加不同校正（殘差 / slot / XGB）
   → 除 raw 外的三種再讀 settings 做「雙向偏差校正 clip ±C」
        （ft 先做 level_scale；含前置 lookback 天估 g；raw 不加）
-  → 抽出 Peak / Ramp 指標，用官方公式算 Total_Score（越低越好）
+  → 抽出 Peak / Ramp 指標，用公式算 Total_Score（越低越好）
 ```
 
-**沒有**把週五 23:50 的預測值「接龍」到週六 00:00；跨日傳遞的是「前幾天的實際誤差資訊」，不是上一預測點的數值。
-
-**兩個常被同名混淆的東西：**
-
-| | 比賽 `S_under_penalty` | 流程裡的 `bias_clip`（settings 鍵名 `underest_penalty`） |
-|--|--|--|
-| 角色 | **評分項**（額外罰分） | **改預測**（`final = pre + clip(g,-C,C)`） |
-| 作用對象 | Day/Night Peak、RampUp 低估 | 全日 10 分鐘曲線 |
-| 程式 | `domain/scoring.py` | `domain/slot_adapt.py` |
+**沒有**把週五 23:50 的預測值連續預測到週六 00:00；跨日傳遞的是「前幾天的實際誤差資訊」，不是上一預測點的數值。
 
 ---
 
@@ -67,10 +59,9 @@
 
 | 用途 | 預設區間 |
 |------|----------|
-| Valid（選超參） | 2026-07-01～07-31 |
-| Test（凍結後評測） | 2026-08-01 起 |
+| Valid set | 2026-07-01～07-31 |
+| Test set | 2026-08-01 起 |
 
-`slot_best`、`ft_xgb_best` 的參數在 valid 選好後**凍結**，不要再依 test 挑最好的當最終模型。
 
 ### 1.4 共同積木：中位數日曲線
 
@@ -81,11 +72,9 @@
 3. 每個時段（一天 144 格）對這 N 天取**中位數** → 得到一條「典型日曲線」
 4. 預測當天：看當天屬於哪一群，把該群曲線整條貼上去
 
-這就是所有方法的「底板」。
-
 ---
 
-## 2. 四種方法長什麼樣（由簡到繁）
+## 2. 四種方法長什麼樣
 
 ```text
 dow_proto_raw     只用同群 16 日中位數（對照用，不加校正）
@@ -109,7 +98,7 @@ ft_xgb_best       同群近 K=8 日中位數 + XGB 殘差（天氣等）
 
 ---
 
-## 3. 各方法白話流程
+## 3. 方法流程
 
 ### 3.1 `dow_proto_raw`：純原型
 
@@ -332,7 +321,6 @@ flowchart TD
 | FT-XGB | `domain/finetune.py`、`domain/dow_xgb.py` |
 | 主實驗與出圖 | `app/experiment_slot_vs_finetune.py` |
 | 掃 C | `app/tune_underest_cap.py` |
-| 競賽評分 | `domain/scoring.py` |
 | 超參 | `settings.yaml` → `dow.proto_*`、`underest_penalty`、`slot_*`、`finetune_lookbacks` |
 
 ```text
