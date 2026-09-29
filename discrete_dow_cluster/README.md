@@ -17,13 +17,13 @@
 
 ```text
 discrete_dow_cluster/
-  app/          # 應用層：實驗入口、掃 C、出圖
+  app/          # 應用層：實驗入口、調校正幅度、出圖
   domain/       # 領域層：分群、預測、校正、評分
   infra/        # 資料層：負載／天氣／假日 I/O
   data/         # holidays.csv
   settings.yaml
   run_experiment.py   # 薄入口
-  run_tune_cap.py
+  run_tune_cap.py     # 試不同「校正幅度上限」
   outputs/
 ```
 
@@ -34,15 +34,26 @@ discrete_dow_cluster/
 ```text
 分開日 24h 預測
   → 四種方法：dow_proto_raw / dow_proto / slot_best / ft_xgb_best
-  → ft：同 weekday 近期水準縮放（level_scale）抑季節漂移
-  → 除 raw 外的三種再套 bias_clip（forecast_mode=rolling）
-       · refs = 日曆 D-1/D-2 ∪ 上週同 weekday；同 weekday 權重較大
-       · g = 加權 mean(實際−pre)；p = clip(g,-C,C)；最終 = pre + p
-       · 假日目標：refs 限同假日群
-       · 輸出比賽 Total_Score + 建議交卷方法（Total 最低者）
+  → ft：用同 weekday 近期水準縮放（level_scale），減輕季節漂移
+  → 除 raw 外的三種，再做「近期高低估」雙向校正
+       · 先看前幾天：實際比預測偏高還是偏低
+       · 把這份偏差加回明天的預測，但幅度有上限（單位 MW）
+       · 假日預測時，參考日限同假日群
+  → 輸出逐日曲線與誤差比較圖／表
 ```
 
-**定案 C** 見 `settings.yaml` → `cap_by_arm`（可由 `app/tune_underest_cap.py` 跨窗 Total_Score 寫回）。
+### 「校正幅度上限」是什麼？（程式裡常寫成 C）
+
+最後一步會問：最近幾天整體是不是一直低估或高估？若是，就把預測整條往上抬或往下壓一點。
+
+但抬／壓不能無限制，否則改過頭。於是設一個**上限**（單位是 MW）：
+
+- 上限 = 0 → 等於不做這步校正  
+- 上限太小 → 修不夠  
+- 上限太大 → 可能修過頭  
+
+目前各方法的上限寫在 `settings.yaml` → `cap_by_arm`。  
+若要重找合適的數字，可跑 `run_tune_cap.py`：它會**試一串不同上限**（例如 0、800、1600…），在幾個日期窗上比較誤差，再把較好的值寫回設定檔。
 
 ## 資料如何取得（負載／天氣 CSV 不進 Git）
 
@@ -81,27 +92,28 @@ python update_taipower_load.py
 python run_experiment.py --origin 2026-09-10 --horizon-days 3 --skip-xgb-valid --open
 # 等同：python -m app.experiment_slot_vs_finetune ...
 
-# ② 跨窗掃 C（預設 8/6 + 9/10）並寫回 settings
+# ② 試不同校正幅度上限（預設含 8/6、9/10 兩段窗），可寫回 settings
 python run_tune_cap.py --skip-xgb-valid --xgb-k 8
 # 等同：python -m app.tune_underest_cap ...
 ```
 
 | 檔案 | 內容 |
 |------|------|
-| `compare_by_day.html` | 逐日曲線 + Total_Score + 建議交卷方法 |
-| `competition_scores.csv` | 分數比 |
+| `compare_by_day.html` | 逐日曲線與方法比較 |
+| `competition_scores.csv` | 各方法誤差分數表 |
 | `level_scale_by_day.csv` | ft 水準縮放 |
-| `curves_pre_with_extra_10min.csv` | pre（含 refs） |
-| `underest_penalty.html` | g / p / refs |
+| `curves_pre_with_extra_10min.csv` | 校正前曲線（含參考日） |
+| `underest_penalty.html` | 近期偏差與校正量說明圖 |
 
 ## 模組對照
 
 | 路徑 | 角色 |
 |------|------|
 | `infra/data_io.py` | 負載／天氣／假日載入 |
-| `domain/scoring.py` | Total_Score + `extract_day` |
+| `domain/scoring.py` | 誤差分數 + `extract_day` |
 | `domain/train_dow_xgb.py` 等 | 四種預測方法的核心 |
 | `app/experiment_slot_vs_finetune.py` | 主實驗 |
+| `app/tune_underest_cap.py` | 試不同校正幅度上限 |
 | `data/holidays.csv` | 國定假日表 |
 
 ## 依賴
