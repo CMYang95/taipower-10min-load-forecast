@@ -1,12 +1,12 @@
 # 2026 AI Competition — 台電 10 分鐘負載預測
 
-日前系統負載預測管線（10 分鐘解析度），核心在 [`discrete_dow_cluster/`](discrete_dow_cluster/)：依星期／假日硬分群，產出四臂預測（`dow_proto_raw` / `dow_proto` / `slot_best` / `ft_xgb_best`）。
+日前系統負載預測（10 分鐘解析度），核心在 [`discrete_dow_cluster/`](discrete_dow_cluster/)：依星期／假日分群後，一次產出 **四種預測結果**（`dow_proto_raw` / `dow_proto` / `slot_best` / `ft_xgb_best`），可互相比較，不依賴其他子專案。
 
 ## 倉庫內容
 
 | 路徑 | 說明 |
 |------|------|
-| `discrete_dow_cluster/` | 自洽四臂預測管線（`app` / `domain` / `infra`） |
+| `discrete_dow_cluster/` | 完整預測流程（四種方法並列；`app` / `domain` / `infra`） |
 | `update_taipower_load.py` | 爬取台電當日 10 分鐘負載並追加 CSV |
 | `discrete_dow_cluster/data/holidays.csv` | 國定假日表（已納入版本庫） |
 
