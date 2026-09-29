@@ -35,8 +35,7 @@ discrete_dow_cluster/outputs/
 *.7z
 *.rar
 
-# 雜項
-*.txt
-!requirements.txt
-!README*.md
+# 本機誤建空白檔
+discrete_dow_cluster/新增\ 文字文件.txt
+**/新增 文字文件.txt
 
